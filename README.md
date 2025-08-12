@@ -1,61 +1,182 @@
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
+# 🍫 Cacau Scraper
+
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+<img src="https://img.shields.io/badge/Laravel-12.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel">
+<img src="https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP">
+<img src="https://img.shields.io/badge/Tailwind_CSS-3.0+-06B6D4?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS">
+<img src="https://img.shields.io/badge/Alpine.js-3.0+-8BC34A?style=for-the-badge&logo=alpine.js&logoColor=white" alt="Alpine.js">
+<img src="https://img.shields.io/badge/MySQL-Database-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+<img src="https://img.shields.io/badge/Vite-Build_Tool-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite">
 </p>
 
-## About Laravel
+Sistema de monitoramento e análise de preços do cacau desenvolvido em Laravel. O projeto oferece uma interface administrativa completa para visualização, análise e exportação de dados históricos de preços do cacau.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 📋 Sobre o Projeto
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+O Cacau Scraper é uma aplicação web desenvolvida com o objetivo de aprendizado em desenvolvimento com Laravel. O projeto permite:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **Monitoramento de Preços**: Acompanhamento em tempo real dos preços do cacau
+- **Análise Histórica**: Visualização de tendências e variações de preços ao longo do tempo
+- **Exportação de Dados**: Download de relatórios em formato CSV com filtros por período
+- **Dashboard Administrativo**: Interface moderna e responsiva para gestão dos dados
+- **Sistema de Logs**: Monitoramento de atividades do sistema
 
-## Learning Laravel
+### 🎯 Objetivo Educacional
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Este projeto foi desenvolvido como uma oportunidade de aprendizado prático com o framework Laravel, explorando suas funcionalidades principais como:
+- Sistema de autenticação com Laravel Breeze
+- Eloquent ORM para gerenciamento de dados
+- Blade templates para renderização de views
+- Migrations e seeders para estrutura do banco
+- Controllers e rotas para lógica da aplicação
+- Integração com frontend moderno (Tailwind CSS + Alpine.js)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 🚀 Funcionalidades
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Dashboard Administrativo
+- **Estatísticas em Tempo Real**: Total de registros, último preço registrado, última atualização e status do sistema
+- **Tabela Interativa**: Listagem paginada com indicadores visuais de variação de preços
+- **Logs do Sistema**: Visualização expansível dos últimos logs do Laravel
 
-## Laravel Sponsors
+### Exportação de Dados
+- **Filtros por Período**: Seleção de data inicial e final para exportação
+- **Formato CSV**: Downloads otimizados com formatação brasileira
+- **Nomenclatura Automática**: Arquivos nomeados com timestamp para organização
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Sistema de Autenticação
+- **Login Seguro**: Autenticação baseada em sessão
+- **Registro de Usuários**: Sistema completo de cadastro
+- **Redirecionamento Inteligente**: Acesso direto ao painel após login
 
-### Premium Partners
+## 🛠️ Tecnologias Utilizadas
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- **Backend**: Laravel 11.x
+- **Frontend**: Blade Templates + Tailwind CSS + Alpine.js
+- **Banco de Dados**: SQLite (configurável para MySQL/PostgreSQL)
+- **Autenticação**: Laravel Breeze
+- **Build Tools**: Vite + NPM
 
-## Contributing
+## 📦 Instalação
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Pré-requisitos
+- PHP 8.2+
+- Composer
+- Node.js 18+
+- NPM
 
-## Code of Conduct
+### Passo a Passo
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. **Clone o repositório**
+   ```bash
+   git clone https://github.com/Projetos-Sistemas-Web/cacau-scraper.git
+   cd cacau-scraper
+   ```
 
-## Security Vulnerabilities
+2. **Instale as dependências do PHP**
+   ```bash
+   composer install
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+3. **Configure o ambiente**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
 
-## License
+4. **Configure o banco de dados**
+   ```bash
+   php artisan migrate
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+5. **Instale as dependências do Node.js**
+   ```bash
+   npm install
+   ```
+
+6. **Compile os assets**
+   ```bash
+   npm run build
+   # ou para desenvolvimento:
+   npm run dev
+   ```
+
+7. **Inicie o servidor**
+   ```bash
+   php artisan serve
+   ```
+
+## 🎯 Como Usar
+
+### Primeiro Acesso
+1. Acesse `http://localhost:8000`
+2. Crie uma conta ou faça login
+3. Será redirecionado automaticamente para o painel administrativo
+
+### Gerenciamento de Dados
+- **Visualizar Preços**: Os dados são exibidos automaticamente na tabela principal
+- **Exportar Relatórios**: Use o botão "Exportar CSV" para baixar dados por período
+- **Monitorar Sistema**: Expanda a seção "Logs do Sistema" para visualizar atividades
+
+### Estrutura de Dados
+```sql
+cocoa_prices
+├── id (Primary Key)
+├── date (Data única do preço)
+├── price (Preço em decimal)
+├── created_at
+└── updated_at
+```
+
+## 📁 Estrutura do Projeto
+
+```
+cacau-scraper/
+├── app/
+│   ├── Http/Controllers/
+│   │   ├── CocoaPriceExportController.php
+│   │   └── Auth/
+│   └── Models/
+│       └── CocoaPrice.php
+├── database/
+│   └── migrations/
+│       └── create_cocoa_prices_table.php
+├── resources/
+│   ├── views/
+│   │   ├── admin/
+│   │   │   └── index.blade.php
+│   │   ├── auth/
+│   │   └── layouts/
+│   └── css/
+├── routes/
+│   └── web.php
+└── public/
+```
+
+## 🔧 Configuração Avançada
+
+### Banco de Dados
+Para usar MySQL ou PostgreSQL, edite o arquivo `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=cacau_scraper
+DB_USERNAME=seu_usuario
+DB_PASSWORD=sua_senha
+```
+
+### Customização do Tailwind
+As cores e estilos podem ser personalizados em `tailwind.config.js`.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a [MIT License](https://opensource.org/licenses/MIT).
+
+---
+
+<p align="center">
+Feito com ❤️ usando Laravel
+</p>
