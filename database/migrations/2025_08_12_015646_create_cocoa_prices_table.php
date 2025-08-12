@@ -13,6 +13,8 @@ return new class extends Migration
     {
         Schema::create('cocoa_prices', function (Blueprint $table) {
             $table->id();
+            $table->date('date')->unique();
+            $table->decimal('price', 8, 2);
             $table->timestamps();
         });
     }
