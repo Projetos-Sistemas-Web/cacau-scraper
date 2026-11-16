@@ -2,47 +2,65 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\CocoaPrice;
-use Illuminate\Http\Response;
+use Illuminate\Http\Request;
 
 class CocoaPriceExportController extends Controller
 {
     /**
-     * Exporta os preços do cacau para CSV baseado no período fornecido.
+     * Exporta os preços do cacau para CSV baseado no período e praça fornecidos.
      */
     public function exportCsv(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'praca_id' => 'nullable|integer',
         ]);
 
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
+        $query = CocoaPrice::whereBetween('date', [$validated['start_date'], $validated['end_date']]);
 
-        // Busca os preços no período especificado
-        $prices = CocoaPrice::whereBetween('date', [$startDate, $endDate])
-            ->orderBy('date', 'desc')
+        if (! empty($validated['praca_id'])) {
+            $query->where('praca_id', (int) $validated['praca_id']);
+        }
+
+        $prices = $query->orderBy('date', 'desc')
+            ->orderBy('city', 'asc')
             ->get();
 
         if ($prices->isEmpty()) {
-            return response()->json([
-                'error' => 'Nenhum dado encontrado para o período especificado.'
-            ], 404);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => 'Nenhum dado encontrado para os filtros especificados.',
+                ], 404);
+            }
+
+            return back()->with('error', 'Nenhum dado encontrado para o período/cidade especificado.');
         }
 
-        // Prepara o conteúdo CSV
-        $csvContent = "Data,Preço (R$)\n";
+        $handle = fopen('php://temp', 'r+');
+        // BOM UTF-8 para compatibilidade com Excel em português
+        fwrite($handle, "\xEF\xBB\xBF");
+        fputcsv($handle, ['Data', 'Cidade', 'Praça ID', 'Produto', 'Tipo', 'Unidade', 'Preço (R$)'], ';');
 
         foreach ($prices as $price) {
-            $csvContent .= $price->date->format('d/m/Y') . ',' . number_format($price->price, 2, ',', '.') . "\n";
+            fputcsv($handle, [
+                $price->date->format('d/m/Y'),
+                $price->city,
+                $price->praca_id,
+                $price->product,
+                $price->type,
+                $price->unit,
+                number_format((float) $price->price, 2, ',', '.'),
+            ], ';');
         }
 
-        // Define o nome do arquivo
+        rewind($handle);
+        $csvContent = stream_get_contents($handle);
+        fclose($handle);
+
         $filename = 'precos_cacau_' . date('Y-m-d_H-i-s') . '.csv';
 
-        // Retorna o arquivo CSV
         return response($csvContent)
             ->header('Content-Type', 'text/csv; charset=UTF-8')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')

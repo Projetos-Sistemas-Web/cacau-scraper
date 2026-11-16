@@ -1,15 +1,15 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <h2 class="font-bold text-2xl text-gray-900 leading-tight">
                     {{ __('Painel Administrativo') }}
                 </h2>
-                <p class="text-sm text-gray-600 mt-1">Monitore os preços do cacau e logs do sistema</p>
+                <p class="text-sm text-gray-600 mt-1">Monitore as cotações da arroba do cacau (SEAGRI-BA) por cidade</p>
             </div>
             <!-- Estatísticas Rápidas -->
-            <div class="flex flex-row md:flex-row mb-8">
-                <div class="bg-white overflow-hidden rounded-xl">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="bg-white overflow-hidden rounded-xl border border-gray-100">
                     <div class="p-4">
                         <div class="flex items-center gap-3">
                             <div class="flex-shrink-0">
@@ -27,7 +27,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white overflow-hidden rounded-xl">
+                <div class="bg-white overflow-hidden rounded-xl border border-gray-100">
                     <div class="p-4">
                         <div class="flex items-center gap-3">
                             <div class="flex-shrink-0">
@@ -40,7 +40,10 @@
                             <div>
                                 <p class="text-sm font-medium text-gray-600">Último Preço</p>
                                 @if($prices->count() > 0)
-                                    <p class="text-xl font-bold text-gray-900">R$ {{ number_format($prices->first()->price, 2, ',', '.') }}</p>
+                                    <p class="text-xl font-bold text-gray-900">
+                                        R$ {{ number_format($prices->first()->price, 2, ',', '.') }}
+                                        <span class="text-xs font-normal text-gray-500">({{ $prices->first()->city }})</span>
+                                    </p>
                                 @else
                                     <p class="text-xl font-bold text-gray-400">--</p>
                                 @endif
@@ -49,7 +52,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white overflow-hidden rounded-xl">
+                <div class="bg-white overflow-hidden rounded-xl border border-gray-100">
                     <div class="p-4">
                         <div class="flex items-center gap-3">
                             <div class="flex-shrink-0">
@@ -62,7 +65,7 @@
                             <div>
                                 <p class="text-sm font-medium text-gray-600">Última Atualização</p>
                                 @if($prices->count() > 0)
-                                    <p class="text-xl font-bold text-gray-900">{{ $prices->first()->date->format('d/m') }}</p>
+                                    <p class="text-xl font-bold text-gray-900">{{ $prices->first()->date->format('d/m/Y') }}</p>
                                 @else
                                     <p class="text-xl font-bold text-gray-400">--</p>
                                 @endif
@@ -70,12 +73,12 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Status do Sistema -->
-            <div class="flex items-center space-x-2 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200">
-                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <span class="text-emerald-700 font-medium text-sm">Sistema Ativo</span>
+                <!-- Status do Sistema -->
+                <div class="flex items-center space-x-2 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200">
+                    <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span class="text-emerald-700 font-medium text-sm">SEAGRI-BA</span>
+                </div>
             </div>
         </div>
     </x-slot>
@@ -83,11 +86,45 @@
     <div class="py-8" x-data="{ showExportModal: false }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
+            @if(session('error'))
+                <div class="mb-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            <!-- Resumo por Cidade -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                @foreach($latestByCity as $cityCard)
+                    @php
+                        $isSelected = $selectedPracaId === $cityCard['praca_id'];
+                    @endphp
+                    <a href="{{ $isSelected ? route('admin.dashboard') : route('admin.dashboard', ['praca_id' => $cityCard['praca_id']]) }}"
+                       class="block bg-white rounded-xl p-5 border transition-all duration-150 hover:shadow-md {{ $isSelected ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-100' }}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-bold text-gray-900">{{ $cityCard['name'] }}</span>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Praça {{ $cityCard['praca_id'] }}</span>
+                        </div>
+                        @if($cityCard['latest'])
+                            <div class="text-2xl font-bold text-emerald-700">
+                                R$ {{ number_format($cityCard['latest']->price, 2, ',', '.') }}
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1 flex items-center justify-between">
+                                <span>{{ $cityCard['latest']->date->format('d/m/Y') }} ({{ $cityCard['latest']->unit }})</span>
+                                <span>{{ $cityCard['count'] }} reg.</span>
+                            </div>
+                        @else
+                            <div class="text-lg font-semibold text-gray-400">Sem cotações</div>
+                            <div class="text-xs text-gray-400 mt-1">0 registros</div>
+                        @endif
+                    </a>
+                @endforeach
+            </div>
+
             <!-- Tabela de Preços do Cacau -->
             <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 mb-8">
                 <div class="px-6 py-4 border-b border-gray-200">
-                    <div class="flex items-center justify-between ">
-                        <div class="flex items-center space-x-5 gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
                             <div class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
                                 <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
@@ -95,10 +132,23 @@
                             </div>
                             <div>
                                 <h3 class="text-lg font-bold text-gray-900">Histórico de Preços do Cacau</h3>
-                                <p class="text-sm text-gray-600">Últimos {{ $prices->count() }} registros de {{ $prices->total() }} no total</p>
+                                <p class="text-sm text-gray-600">Mostrando {{ $prices->count() }} registros de {{ $prices->total() }} no total</p>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-3">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <form method="GET" action="{{ route('admin.dashboard') }}" class="flex items-center gap-2">
+                                <label for="praca_id_filter" class="text-sm text-gray-600">Cidade:</label>
+                                <select id="praca_id_filter" name="praca_id" onchange="this.form.submit()"
+                                        class="text-sm border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500">
+                                    <option value="">Todas as cidades</option>
+                                    @foreach($cities as $pracaId => $cityName)
+                                        <option value="{{ $pracaId }}" @selected($selectedPracaId === $pracaId)>
+                                            {{ $cityName }} ({{ $pracaId }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </form>
+
                             <button @click="showExportModal = true" class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -106,7 +156,7 @@
                                 Exportar CSV
                             </button>
                             <div class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
-                                Página {{ $prices->currentPage() }} de {{ $prices->lastPage() }}
+                                Página {{ $prices->currentPage() }} de {{ max(1, $prices->lastPage()) }}
                             </div>
                         </div>
                     </div>
@@ -120,6 +170,15 @@
                                     Data
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Cidade (Praça)
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Produto / Tipo
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Unidade
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Preço (R$)
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -128,10 +187,9 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($prices as $index => $price)
+                            @forelse($prices as $price)
                                 @php
-                                    $previousPrice = $index < $prices->count() - 1 ? $prices[$index + 1]->price : null;
-                                    $variation = $previousPrice ? (($price->price - $previousPrice) / $previousPrice) * 100 : null;
+                                    $variation = $variations[$price->id] ?? null;
                                 @endphp
                                 <tr class="hover:bg-gray-50 transition-colors duration-150">
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -142,10 +200,22 @@
                                                     {{ $price->date->format('d/m/Y') }}
                                                 </div>
                                                 <div class="text-xs text-gray-500">
-                                                    {{ $price->date->format('l') }}
+                                                    {{ $price->date->translatedFormat('l') }}
                                                 </div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                            {{ $price->city }} ({{ $price->praca_id }})
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-900">{{ $price->product }}</div>
+                                        <div class="text-xs text-gray-500">{{ $price->type }}</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {{ $price->unit }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-lg font-bold text-gray-900">
@@ -176,13 +246,13 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="3" class="px-6 py-12 text-center">
+                                    <td colspan="6" class="px-6 py-12 text-center">
                                         <div class="flex flex-col items-center">
                                             <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
                                             </svg>
                                             <h3 class="text-lg font-medium text-gray-900 mb-1">Nenhum dado encontrado</h3>
-                                            <p class="text-gray-500">Não há registros de preços do cacau disponíveis.</p>
+                                            <p class="text-gray-500">Não há registros de preços do cacau disponíveis para este filtro.</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -193,7 +263,7 @@
 
                 @if($prices->hasPages())
                     <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
                             <div class="text-sm text-gray-700">
                                 Mostrando <span class="font-medium">{{ $prices->firstItem() }}</span> até
                                 <span class="font-medium">{{ $prices->lastItem() }}</span> de
@@ -212,7 +282,7 @@
                 <button @click="open = !open" class="w-full px-6 py-4 border-b border-gray-200 text-left hover:bg-gray-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset">
                     <div class="flex justify-between text-start">
                         <div class="flex gap-4">
-                            <div class="w-10 h-10 bg-slate-100 rounded-xl flex items-center">
+                            <div class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
                                 <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                 </svg>
@@ -277,6 +347,19 @@
                         <form action="{{ route('admin.export.csv') }}" method="POST" class="space-y-4">
                             @csrf
                             <div>
+                                <label for="export_praca_id" class="block text-sm font-medium text-gray-700 mb-1">Cidade (opcional)</label>
+                                <select id="export_praca_id" name="praca_id"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                    <option value="">Todas as cidades</option>
+                                    @foreach($cities as $pracaId => $cityName)
+                                        <option value="{{ $pracaId }}" @selected($selectedPracaId === $pracaId)>
+                                            {{ $cityName }} ({{ $pracaId }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div>
                                 <label for="start_date" class="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
                                 <input type="date" id="start_date" name="start_date" required
                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
@@ -294,7 +377,7 @@
                                     Cancelar
                                 </button>
                                 <button type="submit"
-                                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                                        class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                     Baixar CSV
                                 </button>
                             </div>

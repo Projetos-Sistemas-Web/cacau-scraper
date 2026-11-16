@@ -2,167 +2,305 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Symfony\Component\HttpClient\HttpClient;
-use Symfony\Component\DomCrawler\Crawler;
-use Carbon\Carbon;
 use App\Models\CocoaPrice;
+use App\Services\SeagriCocoaScraper;
+use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class ScrapCocoaPrice extends Command
 {
-     /**
-     * The name and signature of the console command.
-     *
-     * - date (opcional): YYYY-MM-DD (se não informado, usa hoje)
-     * - --from / --to: processa um intervalo de datas (ambos obrigatórios)
-     * - --retries: tentativas por requisição (padrão 3)
-     * - --weekdays: se passado, processa apenas seg-sex
-     */
     protected $signature = 'scrap:cocoa-price
-                            {date? : Data no formato YYYY-MM-DD (opcional, padrão hoje)}
-                            {--from= : Data inicial (YYYY-MM-DD) para range}
-                            {--to= : Data final (YYYY-MM-DD) para range}
-                            {--retries=3 : Tentativas por requisição}
-                            {--weekdays : Processar apenas dias de semana}';
+                            {date? : Data específica no formato YYYY-MM-DD (opcional)}
+                            {--from= : Data inicial (YYYY-MM-DD)}
+                            {--to= : Data final (YYYY-MM-DD)}
+                            {--full : Buscar histórico completo desde 2022-10-01 até hoje}
+                            {--city=* : ID(s) ou nome(s) de cidade da Bahia (omitir para buscar todas as cidades)}
+                            {--tipo= : Tipo na SEAGRI (padrão config scraper.tipo, ex: 484 ou All)}
+                            {--list-cities : Lista todas as praças da Bahia disponíveis na SEAGRI e encerra}
+                            {--retries= : Tentativas por requisição}
+                            {--delay= : Atraso mínimo em milissegundos entre requisições (anti-DDoS)}';
 
-    protected $description = 'Roda o scraping do preço da arroba do cacau na Bahia e salva no banco.';
+    protected $description = 'Busca as cotações da arroba do cacau na SEAGRI-BA para qualquer cidade da Bahia e salva no banco.';
 
-    public function handle(): int
+    public function handle(SeagriCocoaScraper $scraper): int
     {
+        $retries = max(1, (int) ($this->option('retries') ?: config('scraper.retries', 3)));
+
+        if ($this->option('list-cities')) {
+            return $this->handleListCities($scraper, $retries);
+        }
+
+        $range = $this->resolveDateRange();
+        if ($range === null) {
+            return Command::FAILURE;
+        }
+
+        [$fromDate, $toDate] = $range;
+
+        $targets = $this->resolveTargets($scraper, $retries);
+        if (empty($targets)) {
+            $this->error('Nenhuma praça válida encontrada para os parâmetros informados.');
+
+            return Command::FAILURE;
+        }
+
+        $tipo = $this->option('tipo') ?: (string) config('scraper.tipo', '484');
+        $delayMinMs = $this->option('delay') !== null
+            ? max(500, (int) $this->option('delay'))
+            : max(500, (int) config('scraper.delay_min_ms', 2000));
+        $delayMaxMs = max($delayMinMs, (int) config('scraper.delay_max_ms', 3500));
+        $maxPages = max(1, (int) config('scraper.max_pages', 100));
+
+        $this->info("Iniciando scraping SEAGRI-BA ({$fromDate} até {$toDate}, tipo={$tipo})...");
+
+        $totalSaved = 0;
+        $totalSkipped = 0;
+        $hadFailure = false;
+        $requestIndex = 0;
+
+        foreach ($targets as $target) {
+            $praca = $target['praca'];
+            $label = $target['label'];
+            $forcedCity = $praca === 'All' ? null : $label;
+
+            $this->info("=== Consultando: {$label} (praca={$praca}) ===");
+            $targetSaved = 0;
+            $page = 0;
+
+            while ($page < $maxPages) {
+                if ($requestIndex > 0) {
+                    $this->politePause($delayMinMs, $delayMaxMs);
+                }
+                $requestIndex++;
+
+                $url = $scraper->buildUrl($praca, $fromDate, $toDate, $page, $tipo);
+
+                try {
+                    $html = $scraper->fetchPage($url, $retries);
+                } catch (\Throwable $e) {
+                    $hadFailure = true;
+                    $this->error("Erro ao consultar {$label} (página {$page}): {$e->getMessage()}");
+                    Log::error("scrap:cocoa-price erro em {$label} (praca={$praca}, page={$page}): {$e->getMessage()}");
+                    break;
+                }
+
+                $parsed = $scraper->parsePageHtml($html, $praca, $forcedCity);
+                $count = count($parsed['records']);
+                $totalSkipped += $parsed['skipped_no_quote'];
+
+                if ($count > 0) {
+                    $now = now();
+                    $rows = array_map(static fn (array $r) => [
+                        'date' => $r['date'],
+                        'praca_id' => $r['praca_id'],
+                        'city' => $r['city'],
+                        'product' => $r['product'],
+                        'type' => $r['type'],
+                        'unit' => $r['unit'],
+                        'price' => $r['price'],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ], $parsed['records']);
+
+                    CocoaPrice::upsert(
+                        $rows,
+                        ['date', 'praca_id'],
+                        ['city', 'product', 'type', 'unit', 'price', 'updated_at']
+                    );
+
+                    $targetSaved += $count;
+                    $totalSaved += $count;
+                }
+
+                $pageLabel = $parsed['last_page'] !== null
+                    ? ($page + 1) . '/' . ($parsed['last_page'] + 1)
+                    : (string) ($page + 1);
+
+                $this->line("  Página {$pageLabel}: {$count} cotação(ões) salva(s), {$parsed['skipped_no_quote']} sem cotação.");
+
+                if (! $parsed['has_next'] || $parsed['row_count'] === 0) {
+                    break;
+                }
+
+                $page++;
+            }
+
+            if ($targetSaved === 0) {
+                $this->warn("Nenhuma cotação numérica encontrada para {$label} no período {$fromDate}..{$toDate}.");
+            } else {
+                Log::info("scrap:cocoa-price — {$targetSaved} cotação(ões) salva(s) para {$label} ({$fromDate}..{$toDate}).");
+            }
+        }
+
+        $this->info("Finalizado. Total salvo/atualizado: {$totalSaved} registro(s). Ignorados (sem cotação): {$totalSkipped}.");
+
+        return $hadFailure && $totalSaved === 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    private function handleListCities(SeagriCocoaScraper $scraper, int $retries): int
+    {
+        try {
+            $pracas = $scraper->fetchAvailablePracas($retries);
+        } catch (\Throwable $e) {
+            $this->error("Não foi possível consultar a lista de cidades da SEAGRI: {$e->getMessage()}");
+
+            return Command::FAILURE;
+        }
+
+        $this->info('Praças disponíveis na SEAGRI-BA (' . count($pracas) . '):');
+        foreach ($pracas as $id => $name) {
+            $this->line(sprintf('  %4d => %s', $id, $name));
+        }
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * @return list<array{praca: int|string, label: string}>
+     */
+    private function resolveTargets(SeagriCocoaScraper $scraper, int $retries): array
+    {
+        $requested = array_values(array_filter((array) $this->option('city'), static fn ($v) => trim((string) $v) !== ''));
+
+        // Sem filtro --city: consulta praca=All para capturar qualquer cidade da Bahia em uma única varredura
+        if (empty($requested)) {
+            return [[
+                'praca' => 'All',
+                'label' => 'Todas as cidades da Bahia',
+            ]];
+        }
+
+        foreach ($requested as $item) {
+            if (strcasecmp(trim((string) $item), 'All') === 0) {
+                return [[
+                    'praca' => 'All',
+                    'label' => 'Todas as cidades da Bahia',
+                ]];
+            }
+        }
+
+        $knownCities = (array) config('scraper.cities', []) + (array) config('scraper.city_labels', []);
+        $remotePracas = null;
+        $targets = [];
+
+        foreach ($requested as $item) {
+            $raw = trim((string) $item);
+
+            if (ctype_digit($raw)) {
+                $id = (int) $raw;
+                if (isset($knownCities[$id])) {
+                    $targets[$id] = ['praca' => $id, 'label' => $knownCities[$id]];
+                    continue;
+                }
+
+                $remotePracas ??= $scraper->fetchAvailablePracas($retries);
+                if (isset($remotePracas[$id])) {
+                    $targets[$id] = ['praca' => $id, 'label' => $remotePracas[$id]];
+                } else {
+                    $this->warn("Praça ID {$id} não encontrada no formulário da SEAGRI.");
+                }
+                continue;
+            }
+
+            // Busca por nome da cidade (sem acento/case-insensitive)
+            $needle = $scraper->normalizeKey($raw);
+            $matchedId = null;
+
+            foreach ($knownCities as $id => $name) {
+                if ($scraper->normalizeKey($name) === $needle) {
+                    $matchedId = (int) $id;
+                    $targets[$matchedId] = ['praca' => $matchedId, 'label' => $name];
+                    break;
+                }
+            }
+
+            if ($matchedId !== null) {
+                continue;
+            }
+
+            $remotePracas ??= $scraper->fetchAvailablePracas($retries);
+            foreach ($remotePracas as $id => $name) {
+                if ($scraper->normalizeKey($name) === $needle) {
+                    $matchedId = (int) $id;
+                    $targets[$matchedId] = ['praca' => $matchedId, 'label' => $name];
+                    break;
+                }
+            }
+
+            if ($matchedId === null) {
+                $this->warn("Cidade '{$raw}' não encontrada na SEAGRI. Use --list-cities para ver os nomes válidos.");
+            }
+        }
+
+        return array_values($targets);
+    }
+
+    /**
+     * @return array{0: string, 1: string}|null
+     */
+    private function resolveDateRange(): ?array
+    {
+        $tz = 'America/Sao_Paulo';
+        $today = Carbon::today($tz);
+
         $dateArg = $this->argument('date');
         $from = $this->option('from');
         $to = $this->option('to');
-        $retries = max(1, (int) $this->option('retries'));
-        $onlyWeekdays = $this->option('weekdays');
+        $full = (bool) $this->option('full');
 
-        // Monta lista de datas a processar
-        $dates = [];
-
-        if ($from || $to) {
-            if (!$from || !$to) {
-                $this->error('Para usar intervalo é necessário passar --from e --to (YYYY-MM-DD).');
-                return Command::FAILURE;
-            }
-            try {
-                $start = Carbon::createFromFormat('Y-m-d', $from)->startOfDay();
-                $end   = Carbon::createFromFormat('Y-m-d', $to)->startOfDay();
-            } catch (\Exception $e) {
-                $this->error('Formato de data inválido em --from/--to. Use YYYY-MM-DD.');
-                return Command::FAILURE;
-            }
-            if ($start->gt($end)) {
-                $this->error('--from não pode ser posterior a --to.');
-                return Command::FAILURE;
-            }
-            for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
-                if ($onlyWeekdays && $d->isWeekend()) {
-                    continue;
-                }
-                $dates[] = $d->copy();
-            }
-        } else {
-            try {
-                $d = $dateArg ? Carbon::createFromFormat('Y-m-d', $dateArg) : Carbon::today('America/Sao_Paulo');
-            } catch (\Exception $e) {
-                $this->error('Formato de data inválido no argumento date. Use YYYY-MM-DD.');
-                return Command::FAILURE;
-            }
-            if ($onlyWeekdays && $d->isWeekend()) {
-                $this->info("Data {$d->toDateString()} é fim de semana e --weekdays foi passado. Encerrando sem processar.");
-                return Command::SUCCESS;
-            }
-            $dates[] = $d;
+        if ($full) {
+            return ['2022-10-01', $today->format('Y-m-d')];
         }
 
-        // Http client (com User-Agent para reduzir bloqueios)
-        $client = HttpClient::create([
-            'timeout' => 20,
-            'headers' => [
-                'User-Agent' => 'Mozilla/5.0 (compatible; CocoaScraper/1.0; +https://example.com)'
-            ],
-        ]);
+        if ($from || $to) {
+            if (! $from || ! $to) {
+                $this->error('Para usar intervalo é necessário informar --from e --to (YYYY-MM-DD).');
 
-        foreach ($dates as $date) {
-            $dateStr = $date->format('Y-m-d');
-            $this->info("=== Processando {$dateStr} ===");
-            $url = "https://www.noticiasagricolas.com.br/cotacoes/cacau/cacau-mercado-do-cacau/{$dateStr}";
-
-            $succeeded = false;
-
-            for ($attempt = 1; $attempt <= $retries; $attempt++) {
-                try {
-                    $response = $client->request('GET', $url);
-                    $status = $response->getStatusCode();
-
-                    if ($status !== 200) {
-                        $this->warn("Tentativa {$attempt}: status HTTP {$status} — {$url}");
-                        sleep(2);
-                        continue;
-                    }
-
-                    $content = $response->getContent();
-                    $crawler = new Crawler($content);
-
-                    $found = false;
-
-                    // Percorre linhas da primeira tabela encontrada
-                    $crawler->filter('table tr')->each(function (Crawler $row) use (&$found, $dateStr) {
-                        $tds = $row->filter('td');
-
-                        if ($tds->count() >= 2) {
-                            $estado = trim($tds->eq(0)->text());
-
-                            if (stripos($estado, 'Bahia') !== false) {
-                                $raw = trim($tds->eq(1)->text());
-
-                                // Limpeza robusta do número (ex: "R$ 1.234,56" -> "1234.56")
-                                $clean = preg_replace('/[^0-9,.\-]/', '', $raw);
-                                // remover pontos de milhar e transformar vírgula decimal em ponto
-                                $clean = str_replace('.', '', $clean);
-                                $clean = str_replace(',', '.', $clean);
-
-                                $price = is_numeric($clean) ? round((float)$clean, 2) : null;
-
-                                if ($price !== null) {
-                                    CocoaPrice::updateOrCreate(
-                                        ['date' => $dateStr],
-                                        ['price' => $price]
-                                    );
-
-                                    $this->info("Encontrado e salvo: R$ {$price} — {$dateStr}");
-                                    Log::info("scrap:cocoa-price — preço salvo R$ {$price} para {$dateStr}");
-                                    $found = true;
-                                } else {
-                                    $this->warn("Linha Bahia encontrada, mas não foi possível parsear preço: '{$raw}'");
-                                }
-                            }
-                        }
-                    });
-
-                    if (!$found) {
-                        $this->warn("Não encontrei linha 'Bahia' na tabela para {$dateStr} (pode não existir cotação neste dia).");
-                    }
-
-                    $succeeded = true;
-                    break; // sai do loop de tentativas
-                } catch (\Throwable $e) {
-                    $this->error("Erro na tentativa {$attempt} para {$dateStr}: {$e->getMessage()}");
-                    Log::error("scrap:cocoa-price erro: {$e->getMessage()} em {$dateStr}");
-                    // backoff simples
-                    sleep(2 * $attempt);
-                }
-            } // end attempts
-
-            if (!$succeeded) {
-                $this->error("Falha ao processar {$dateStr} após {$retries} tentativas.");
+                return null;
             }
 
-            // espera curta entre requisições para ser gentil com o servidor
-            sleep(rand(1, 3));
-        } // end foreach dates
+            try {
+                $start = Carbon::createFromFormat('Y-m-d', $from, $tz)->startOfDay();
+                $end = Carbon::createFromFormat('Y-m-d', $to, $tz)->startOfDay();
+            } catch (\Throwable) {
+                $this->error('Formato de data inválido em --from/--to. Use YYYY-MM-DD.');
 
-        $this->info('Processamento finalizado.');
-        return Command::SUCCESS;
+                return null;
+            }
+
+            if ($start->gt($end)) {
+                $this->error('--from não pode ser posterior a --to.');
+
+                return null;
+            }
+
+            return [$start->format('Y-m-d'), $end->format('Y-m-d')];
+        }
+
+        if ($dateArg) {
+            try {
+                $d = Carbon::createFromFormat('Y-m-d', $dateArg, $tz)->format('Y-m-d');
+
+                return [$d, $d];
+            } catch (\Throwable) {
+                $this->error('Formato de data inválido no argumento date. Use YYYY-MM-DD.');
+
+                return null;
+            }
+        }
+
+        $lookback = max(1, (int) config('scraper.default_lookback_days', 30));
+
+        return [
+            $today->copy()->subDays($lookback)->format('Y-m-d'),
+            $today->format('Y-m-d'),
+        ];
+    }
+
+    private function politePause(int $minMs, int $maxMs): void
+    {
+        $delayMs = random_int($minMs, $maxMs);
+        usleep($delayMs * 1000);
     }
 }
